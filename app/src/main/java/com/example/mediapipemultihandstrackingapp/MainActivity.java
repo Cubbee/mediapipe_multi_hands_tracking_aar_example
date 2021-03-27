@@ -3,11 +3,10 @@ package com.example.mediapipemultihandstrackingapp;
 import android.content.pm.ApplicationInfo;
 import android.content.pm.PackageManager;
 import android.content.pm.PackageManager.NameNotFoundException;
+import android.graphics.Bitmap;
 import android.graphics.SurfaceTexture;
 import android.os.Bundle;
-
-import androidx.appcompat.app.AppCompatActivity;
-
+import android.os.Environment;
 import android.util.Log;
 import android.util.Size;
 import android.view.SurfaceHolder;
@@ -15,19 +14,24 @@ import android.view.SurfaceView;
 import android.view.View;
 import android.view.ViewGroup;
 
-import com.google.mediapipe.formats.proto.LandmarkProto.NormalizedLandmark;
-import com.google.mediapipe.formats.proto.LandmarkProto.NormalizedLandmarkList;
+import androidx.appcompat.app.AppCompatActivity;
+
 import com.google.mediapipe.components.CameraHelper;
 import com.google.mediapipe.components.CameraXPreviewHelper;
 import com.google.mediapipe.components.ExternalTextureConverter;
 import com.google.mediapipe.components.FrameProcessor;
 import com.google.mediapipe.components.PermissionHelper;
+import com.google.mediapipe.formats.proto.LandmarkProto.NormalizedLandmark;
+import com.google.mediapipe.formats.proto.LandmarkProto.NormalizedLandmarkList;
 import com.google.mediapipe.framework.AndroidAssetUtil;
 import com.google.mediapipe.framework.AndroidPacketCreator;
-import com.google.mediapipe.framework.PacketGetter;
+import com.google.mediapipe.framework.AndroidPacketGetter;
 import com.google.mediapipe.framework.Packet;
+import com.google.mediapipe.framework.PacketGetter;
 import com.google.mediapipe.glutil.EglManager;
 
+import java.io.File;
+import java.io.FileOutputStream;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -112,6 +116,13 @@ public class MainActivity extends AppCompatActivity {
         // To show verbose logging, run:
         // adb shell setprop log.tag.MainActivity VERBOSE
         if (Log.isLoggable(TAG, Log.VERBOSE)) {
+            File sd = Environment.getExternalStorageDirectory();
+            File debugFolder = new File(sd, "mediapipe");
+
+            if (!debugFolder.exists()) {
+                debugFolder.mkdirs();
+            }
+
             processor.addPacketCallback(
                     OUTPUT_LANDMARKS_STREAM_NAME,
                     (packet) -> {
@@ -124,6 +135,25 @@ public class MainActivity extends AppCompatActivity {
                                         + packet.getTimestamp()
                                         + "] "
                                         + getMultiHandLandmarksDebugString(multiHandLandmarks));
+                    });
+
+            processor.addPacketCallback(
+                    "throttled_input_video_cpu",
+                    (packet) -> {
+                        Log.v(TAG, "Received input_image_cpu packet.");
+                        Bitmap image = AndroidPacketGetter.getBitmapFromRgba(packet);
+
+                        String filename = "image_" + packet.getTimestamp() + ".jpg";
+                        File dest = new File(debugFolder, filename);
+
+                        try {
+                            FileOutputStream out = new FileOutputStream(dest);
+                            image.compress(Bitmap.CompressFormat.JPEG, 90, out);
+                            out.flush();
+                            out.close();
+                        } catch (Exception e) {
+                            e.printStackTrace();
+                        }
                     });
         }
     }
